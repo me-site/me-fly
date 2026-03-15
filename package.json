@@ -1,6 +1,6 @@
 {
   "name": "mesite",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "dependencies": {
     "node-fetch": "^2.6.9"
   }
