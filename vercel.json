@@ -1,19 +1,10 @@
 {
   "version": 2,
+  "regions": ["hkg1"],
   "rewrites": [
     {
       "source": "/api/proxy",
       "destination": "/api/proxy.js"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS" },
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
-      ]
     }
   ]
 }
