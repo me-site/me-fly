@@ -1,6 +1,8 @@
 {
   "version": 2,
   "regions": ["hkg1"],
+  "public": true,
+  "trailingSlash": false,
   "rewrites": [
     { "source": "/api/proxy", "destination": "/api/proxy.js" }
   ]
