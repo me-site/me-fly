@@ -1,8 +1,8 @@
 {
-  "name": "me-vercel-proxy",
-  "version": "1.0.0",
+  "name": "me-site",
+  "version": "1.0.1",
   "type": "module",
   "dependencies": {
-    "axios": "^1.6.0"
+    "axios": "^1.6.7"
   }
 }
