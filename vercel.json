@@ -3,16 +3,8 @@
   "regions": ["hkg1"],
   "rewrites": [
     {
-      "source": "/live/(.*)",
-      "destination": "/api/proxy?url=$1"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
-      ]
+      "source": "/proxy",
+      "destination": "/api/proxy"
     }
   ]
 }
