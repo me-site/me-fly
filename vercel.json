@@ -4,12 +4,20 @@
     {
       "src": "edge/functions/index.js",
       "use": "@vercel/edge"
+    },
+    {
+      "src": "edge/functions/hongkong.js",
+      "use": "@vercel/edge"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
       "dest": "/edge/functions/index.js"
+    },
+    {
+      "src": "/hongkong/(.*)",
+      "dest": "/edge/functions/hongkong.js"
     }
   ]
 }
