@@ -46,52 +46,43 @@ body {
 <div class="serverinfo">
 
 <p>服务器IP：<span id="serverip">检测中...</span></p>
-
 <p>访问者IP：<span id="clientip">检测中...</span></p>
 
 </div>
 
 <script>
-
-// 国家中文映射
 const countryCN = {
-"Singapore":"新加坡",
-"United States":"美国",
-"Japan":"日本",
-"China":"中国",
-"Germany":"德国",
-"United Kingdom":"英国",
-"France":"法国",
-"Hong Kong":"中国香港",
-"Taiwan":"中国台湾"
+  "Singapore":"新加坡",
+  "United States":"美国",
+  "Hong Kong":"中国香港",
+  "China":"中国",
+  "Taiwan":"中国台湾",
+  "Japan":"日本"
 };
 
-// 获取访问者IP
-fetch("https://ipapi.co/json/")
-.then(res=>res.json())
-.then(data=>{
-let country = countryCN[data.country_name] || data.country_name;
-document.getElementById("clientip").textContent =
-data.ip + " (" + country + " " + data.region + ")";
-});
-
 // 获取服务器IP
-fetch("https://dns.google/resolve?name="+location.hostname+"&type=A")
-.then(res=>res.json())
-.then(d=>{
-let ip=d.Answer[0].data;
-
-fetch("https://ipapi.co/"+ip+"/json/")
-.then(r=>r.json())
-.then(g=>{
-let country = countryCN[g.country_name] || g.country_name;
-
-document.getElementById("serverip").textContent =
-ip + " (" + country + " " + g.region + ")";
-});
+fetch("/api/serverip")
+.then(res => res.json())
+.then(data=>{
+  const country = countryCN[data.country] || data.country;
+  document.getElementById("serverip").textContent =
+    data.ip + " (" + country + " " + data.region + ")";
+})
+.catch(()=>{
+  document.getElementById("serverip").textContent = "获取失败";
 });
 
+// 获取访问者IP
+fetch("https://ipwhois.app/json/")   // 仍然用可靠API
+.then(res => res.json())
+.then(data=>{
+  const country = countryCN[data.country] || data.country;
+  document.getElementById("clientip").textContent =
+    data.ip + " (" + country + " " + (data.region || "") + ")";
+})
+.catch(()=>{
+  document.getElementById("clientip").textContent = "获取失败";
+});
 </script>
-
 </body>
 </html>
