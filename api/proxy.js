@@ -3,38 +3,47 @@ import { Stream } from 'stream';
 
 export default async function handler(req, res) {
     const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send("No URL provided");
-
-    const isTS = req.query.type === 'ts' || targetUrl.includes('.ts') || targetUrl.includes('.m4s');
+    if (!targetUrl) return res.status(400).send("No URL");
 
     const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://www.4gtv.tv/',
-        'Access-Control-Allow-Origin': '*'
+        'Referer': 'https://www.4gtv.tv/'
     };
 
     try {
+        const isTS = req.query.type === 'ts' || targetUrl.includes('.ts') || targetUrl.includes('.m4s') || targetUrl.includes('.mp4');
+
         const response = await axios.get(targetUrl, {
             headers: headers,
-            timeout: isTS ? 30000 : 10000,
+            timeout: isTS ? 30000 : 15000,
             responseType: isTS ? 'stream' : 'text',
             validateStatus: () => true
         });
 
-        // 设置跨域头
         res.setHeader('Access-Control-Allow-Origin', '*');
 
         if (isTS) {
-            // 切片流式转发
+            // --- 视频流切片转发 ---
             res.setHeader('Content-Type', 'video/mp2t');
             res.setHeader('Cache-Control', 'public, max-age=3600');
-            if (response.data instanceof Stream) {
-                response.data.pipe(res);
-            } else {
-                res.status(500).send("Stream error");
-            }
+            response.data.pipe(res);
+        } else if (typeof response.data === 'string' && response.data.includes('#EXTM3U')) {
+            // --- 关键：二级 M3U8 递归重写 ---
+            res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+            const basePath = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+            const selfUrl = `https://${req.headers.host}${req.url.split('?')[0]}?url=`;
+
+            const lines = response.data.split('\n');
+            const processed = lines.map(line => {
+                const l = line.trim();
+                if (!l || l.startsWith('#')) return l;
+                const abs = l.startsWith('http') ? l : (basePath + l);
+                return `${selfUrl}${encodeURIComponent(abs)}&type=ts`;
+            }).join('\n');
+
+            res.send(processed);
         } else {
-            // 非切片直接透传
+            // --- 其他：MPD、Key、Init Segment ---
             res.status(response.status).send(response.data);
         }
     } catch (err) {
