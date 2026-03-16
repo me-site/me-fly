@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "edge/functions/index.js",
+      "use": "@vercel/edge"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/edge/functions/index.js"
+    }
+  ]
+}

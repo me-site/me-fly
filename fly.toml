@@ -1,6 +1,0 @@
-app = "me-fly"  # <-- 这里填您的 Fly.io 应用名
-
-primary_region = "hkg"
-
-[build]
-  image = "node:18"
