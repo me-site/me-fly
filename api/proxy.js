@@ -1,30 +1,35 @@
-const axios = require('axios');
+import axios from 'axios';
 
 export default async function handler(req, res) {
-  // 获取要代理的目标 URL，例如：/api/proxy?url=http://example.com/live.m3u8
-  const { url } = req.query;
+    const targetUrl = req.query.url;
+    if (!targetUrl) return res.status(400).send('未提供 URL 参数');
 
-  if (!url) {
-    return res.status(400).send('Missing url parameter');
-  }
+    try {
+        const response = await axios.get(targetUrl, {
+            timeout: 10000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': new URL(targetUrl).origin
+            }
+        });
 
-  try {
-    const response = await axios.get(url, {
-      responseType: 'stream',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-      timeout: 10000 // 10秒超时，适应 Vercel 限制
-    });
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', response.headers['content-type'] || 'application/vnd.apple.mpegurl');
+        
+        // 如果是 m3u8 内容，将内部的相对路径补全为绝对路径
+        let data = response.data;
+        if (typeof data === 'string' && data.includes('#EXTM3U')) {
+            const originBase = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+            data = data.split('\n').map(line => {
+                if (line.trim() !== '' && !line.startsWith('#') && !line.startsWith('http')) {
+                    return originBase + line;
+                }
+                return line;
+            }).join('\n');
+        }
 
-    // 设置跨域头，允许播放器调用
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', response.headers['content-type']);
-
-    // 将直播流管道传输给客户端
-    response.data.pipe(res);
-  } catch (error) {
-    console.error('Proxy error:', error.message);
-    res.status(500).send('Error fetching the stream');
-  }
+        res.status(200).send(data);
+    } catch (error) {
+        res.status(500).send('代理失败: ' + error.message);
+    }
 }
