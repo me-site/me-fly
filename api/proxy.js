@@ -1,82 +1,77 @@
 import axios from 'axios';
+import { Stream } from 'stream';
 
 export default async function handler(req, res) {
     const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send("No URL");
+    if (!targetUrl) return res.status(400).send("#EXTM3U\n#ERROR: No URL provided");
 
-    // 1. 设置请求头（模拟真实的 4GTV 访问环境）
-    const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://www.4gtv.tv/',
-        'Origin': 'https://www.4gtv.tv/',
-        'Accept': '*/*'
-    };
+    const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+    const referer = "https://www.4gtv.tv/";
 
     try {
-        // 2. 发起请求 (使用 arraybuffer 兼容处理文本和切片)
+        // 判断是否为 TS 切片请求
+        const isTS = targetUrl.includes('.ts') || req.query.type === 'ts';
+
         const response = await axios.get(targetUrl, {
-            headers,
-            timeout: 12000,
-            responseType: 'arraybuffer',
-            validateStatus: () => true 
+            headers: { 'User-Agent': ua, 'Referer': referer },
+            timeout: isTS ? 45000 : 15000,
+            responseType: isTS ? 'stream' : 'text', // 核心优化：TS 走流，M3U8 走文本
+            validateStatus: () => true
         });
 
-        // 检查源站状态
-        if (response.status !== 200) {
-            return res.status(response.status).send(`Target returned ${response.status}`);
-        }
-
-        const contentType = response.headers['content-type'] || "";
-        const finalUrl = response.request.res.responseUrl || targetUrl;
-        const data = response.data;
-
-        // 设置通用响应头
+        // 基础响应头
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'no-cache');
+        const finalUrl = response.request.res.responseUrl || targetUrl;
 
-        // 3. 核心逻辑：判断内容类型
-        const isM3U8 = contentType.includes('mpegurl') || contentType.includes('application/x-mpegURL') || targetUrl.includes('.m3u8');
-
-        if (isM3U8) {
-            // --- 处理 M3U8 重写 ---
-            res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-            let content = data.toString('utf8');
+        if (isTS) {
+            // --- 逻辑分流：TS 切片流式转发 (类似 PHP fpassthru) ---
+            res.setHeader('Content-Type', 'video/mp2t');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
             
-            // 获取基础路径用于补全
+            // 将 axios 的响应流直接导向 Vercel 的响应
+            if (response.data instanceof Stream) {
+                response.data.pipe(res);
+            } else {
+                res.status(500).send("Stream error");
+            }
+        } else {
+            // --- 逻辑分流：M3U8 列表解析与重写 ---
+            res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+            const content = response.data;
             const urlObj = new URL(finalUrl);
             const basePath = finalUrl.substring(0, finalUrl.lastIndexOf('/') + 1);
-            const selfBase = `https://${req.headers.host}/api/proxy?url=`;
+            const query = urlObj.search; // 透传原始 Token 参数
+            
+            // 自动获取当前 Vercel 域名
+            const selfUrl = `https://${req.headers.host}/api/proxy?url=`;
 
             const lines = content.split('\n');
             const processed = lines.map(line => {
-                let l = line.trim();
+                const l = line.trim();
                 if (!l) return "";
 
                 if (l.startsWith('#')) {
-                    // 补丁：处理加密 Key 的 URI (对应 PHP 的 preg_replace_callback)
+                    // 处理加密 Key URI
                     if (l.includes('URI="')) {
                         return l.replace(/URI="([^"]+)"/, (match, p1) => {
-                            const abs = p1.startsWith('http') ? p1 : basePath + p1;
-                            return `URI="${selfBase}${encodeURIComponent(abs)}"`;
+                            const abs = p1.startsWith('http') ? p1 : (basePath + p1 + query);
+                            return `URI="${selfUrl}${encodeURIComponent(abs)}"`;
                         });
                     }
                     return l;
                 } else {
-                    // 处理视频切片或二级索引
-                    const abs = l.startsWith('http') ? l : basePath + l;
-                    return `${selfBase}${encodeURIComponent(abs)}`;
+                    // 处理 TS 链接并添加 type=ts 标记
+                    const abs = l.startsWith('http') ? l : (basePath + l + query);
+                    const connector = abs.includes('?') ? '&' : '?';
+                    return `${selfUrl}${encodeURIComponent(abs)}${connector}type=ts`;
                 }
             });
 
-            return res.status(200).send(processed.join('\n'));
-
-        } else {
-            // --- 处理 TS 切片、Key、图片等二进制流 ---
-            res.setHeader('Content-Type', contentType || 'application/octet-stream');
-            return res.status(200).send(data);
+            res.status(200).send(processed.join('\n'));
         }
-
     } catch (err) {
-        return res.status(500).send("Proxy Error: " + err.message);
+        res.status(500).send(`#EXTM3U\n#ERROR: ${err.message}`);
     }
 }
